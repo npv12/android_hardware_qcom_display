@@ -17,14 +17,15 @@
  * limitations under the License.
  */
 
-#include <stdint.h>
-#include <qdMetaData.h>
-
 #include "hwc_layers.h"
+
+#include <qdMetaData.h>
+#include <stdint.h>
 #ifndef USE_GRALLOC1
 #include <gr.h>
 #endif
 #include <utils/debug.h>
+
 #include <cmath>
 
 #define __CLASS__ "HWCLayer"
@@ -34,31 +35,30 @@ namespace sdm {
 std::atomic<hwc2_layer_t> HWCLayer::next_id_(1);
 
 DisplayError SetCSC(const private_handle_t *pvt_handle, ColorMetaData *color_metadata) {
-  if (getMetaData(const_cast<private_handle_t *>(pvt_handle), GET_COLOR_METADATA,
-                  color_metadata) != 0) {
+  if (getMetaData(const_cast<private_handle_t *>(pvt_handle), GET_COLOR_METADATA, color_metadata) !=
+      0) {
     ColorSpace_t csc = ITU_R_601;
-    if (getMetaData(const_cast<private_handle_t *>(pvt_handle),  GET_COLOR_SPACE,
-                    &csc) == 0) {
+    if (getMetaData(const_cast<private_handle_t *>(pvt_handle), GET_COLOR_SPACE, &csc) == 0) {
       if (csc == ITU_R_601_FR || csc == ITU_R_2020_FR) {
         color_metadata->range = Range_Full;
       }
 
       switch (csc) {
-      case ITU_R_601:
-      case ITU_R_601_FR:
-        // video and display driver uses 601_525
-        color_metadata->colorPrimaries = ColorPrimaries_BT601_6_525;
-        break;
-      case ITU_R_709:
-        color_metadata->colorPrimaries = ColorPrimaries_BT709_5;
-        break;
-      case ITU_R_2020:
-      case ITU_R_2020_FR:
-        color_metadata->colorPrimaries = ColorPrimaries_BT2020;
-        break;
-      default:
-        DLOGE("Unsupported CSC: %d", csc);
-        return kErrorNotSupported;
+        case ITU_R_601:
+        case ITU_R_601_FR:
+          // video and display driver uses 601_525
+          color_metadata->colorPrimaries = ColorPrimaries_BT601_6_525;
+          break;
+        case ITU_R_709:
+          color_metadata->colorPrimaries = ColorPrimaries_BT709_5;
+          break;
+        case ITU_R_2020:
+        case ITU_R_2020_FR:
+          color_metadata->colorPrimaries = ColorPrimaries_BT2020;
+          break;
+        default:
+          DLOGE("Unsupported CSC: %d", csc);
+          return kErrorNotSupported;
       }
     } else {
       return kErrorNotSupported;
@@ -73,7 +73,7 @@ bool GetColorPrimary(const int32_t &dataspace, ColorPrimaries *color_primary) {
   auto standard = dataspace & HAL_DATASPACE_STANDARD_MASK;
   bool supported_csc = true;
   switch (standard) {
-    case  HAL_DATASPACE_STANDARD_BT709:
+    case HAL_DATASPACE_STANDARD_BT709:
       *color_primary = ColorPrimaries_BT709_5;
       break;
     case HAL_DATASPACE_STANDARD_BT601_525:
@@ -143,11 +143,11 @@ void GetRange(const int32_t &dataspace, ColorRange *color_range) {
 
 bool IsBT2020(const ColorPrimaries &color_primary) {
   switch (color_primary) {
-  case ColorPrimaries_BT2020:
-    return true;
-    break;
-  default:
-    return false;
+    case ColorPrimaries_BT2020:
+      return true;
+      break;
+    default:
+      return false;
   }
 }
 
@@ -169,7 +169,7 @@ bool GetSDMColorSpace(const int32_t &dataspace, ColorMetaData *color_metadata) {
 
 // Layer operations
 HWCLayer::HWCLayer(hwc2_display_t display_id, HWCBufferAllocator *buf_allocator)
-  : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
+    : id_(next_id_++), display_id_(display_id), buffer_allocator_(buf_allocator) {
   layer_ = new Layer();
   // Fences are deferred, so the first time this layer is presented, return -1
   // TODO(user): Verify that fences are properly obtained on suspend/resume
@@ -412,10 +412,9 @@ HWC2::Error HWCLayer::SetLayerPlaneAlpha(float alpha) {
 HWC2::Error HWCLayer::SetLayerSourceCrop(hwc_frect_t crop) {
   LayerRect src_rect = {};
   SetRect(crop, &src_rect);
-  non_integral_source_crop_ = ((crop.left != roundf(crop.left)) ||
-                              (crop.top != roundf(crop.top)) ||
-                              (crop.right != roundf(crop.right)) ||
-                              (crop.bottom != roundf(crop.bottom)));
+  non_integral_source_crop_ =
+      ((crop.left != roundf(crop.left)) || (crop.top != roundf(crop.top)) ||
+       (crop.right != roundf(crop.right)) || (crop.bottom != roundf(crop.bottom)));
   if (non_integral_source_crop_) {
     DLOGV_IF(kTagClient, "Crop: LRTB %f %f %f %f", crop.left, crop.top, crop.right, crop.bottom);
   }
@@ -481,6 +480,13 @@ HWC2::Error HWCLayer::SetLayerVisibleRegion(hwc_region_t visible) {
 
 HWC2::Error HWCLayer::SetLayerZOrder(uint32_t z) {
   if (z_ != z) {
+#ifdef FOD_ZPOS
+    if (z & FOD_PRESSED_LAYER_ZORDER) {
+      fod_pressed_ = true;
+      z &= ~uint32_t(FOD_PRESSED_LAYER_ZORDER);
+    }
+#endif
+
     geometry_changes_ |= kZOrder;
     z_ = z;
   }
@@ -731,8 +737,6 @@ DisplayError HWCLayer::SetIGC(IGC_t source, LayerIGC *target) {
   return kErrorNone;
 }
 
-
-
 bool HWCLayer::SupportLocalConversion(ColorPrimaries working_primaries) {
   if (layer_->input_buffer.color_metadata.colorPrimaries <= ColorPrimaries_BT601_6_525 &&
       working_primaries <= ColorPrimaries_BT601_6_525) {
@@ -766,14 +770,14 @@ bool HWCLayer::ValidateAndSetCSC() {
 #endif
 
   if (IsBT2020(layer_buffer->color_metadata.colorPrimaries)) {
-     // android_dataspace_t doesnt support mastering display and light levels
-     // so retrieve it from metadata for BT2020(HDR)
-     use_color_metadata = true;
+    // android_dataspace_t doesnt support mastering display and light levels
+    // so retrieve it from metadata for BT2020(HDR)
+    use_color_metadata = true;
   }
 
   if (use_color_metadata) {
     const private_handle_t *handle =
-      reinterpret_cast<const private_handle_t *>(layer_buffer->buffer_id);
+        reinterpret_cast<const private_handle_t *>(layer_buffer->buffer_id);
     if (sdm::SetCSC(handle, &layer_buffer->color_metadata) != kErrorNone) {
       return false;
     }
@@ -781,7 +785,6 @@ bool HWCLayer::ValidateAndSetCSC() {
 
   return true;
 }
-
 
 uint32_t HWCLayer::RoundToStandardFPS(float fps) {
   static const uint32_t standard_fps[4] = {24, 30, 48, 60};
